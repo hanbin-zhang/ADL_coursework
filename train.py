@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import time
 from multiprocessing import cpu_count
 from typing import Union, NamedTuple
@@ -74,6 +75,18 @@ parser.add_argument(
     type=float,
     help="Value of SGD momentum")
 
+parser.add_argument(
+    "--stride_conv_length",
+    default=256,
+    type=int,
+    help="Value of stride convolution kernel length")
+
+parser.add_argument(
+    "--stride_conv_stride",
+    default=256,
+    type=int,
+    help="Value of stride convolution kernel stride")
+
 
 class ImageShape(NamedTuple):
     height: int
@@ -88,30 +101,27 @@ else:
 
 
 def main(args):
-    transform = transforms.ToTensor()
-    args.dataset_root.mkdir(parents=True, exist_ok=True)
-    train_dataset = torchvision.datasets.CIFAR10(
-        args.dataset_root, train=True, download=True, transform=transform
-    )
-    test_dataset = torchvision.datasets.CIFAR10(
-        args.dataset_root, train=False, download=False, transform=transform
-    )
+    trainMagnaTagATune = MagnaTagATune(args.dataset_root + "/annotations/train_labels.pkl",
+                                       args.dataset_root + "/samples")
+    validateMagnaTagATune = MagnaTagATune(args.dataset_root + "/annotations/val_labels.pkl",
+                                          args.dataset_root + "/samples")
+
     train_loader = torch.utils.data.DataLoader(
-        train_dataset,
+        trainMagnaTagATune,
         shuffle=True,
         batch_size=args.batch_size,
         pin_memory=True,
         num_workers=args.worker_count,
     )
     test_loader = torch.utils.data.DataLoader(
-        test_dataset,
+        validateMagnaTagATune,
         shuffle=False,
         batch_size=args.batch_size,
         num_workers=args.worker_count,
         pin_memory=True,
     )
 
-    model = CNN(height=32, width=32, channels=3, class_count=10)
+    model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.CrossEntropyLoss()
@@ -140,56 +150,54 @@ def main(args):
 
 
 class CNN(nn.Module):
-    def __init__(self, height: int, width: int, channels: int, class_count: int):
+    def __init__(self, sub_clips: int,  channels: int, num_samples: int, class_count: int):
         super().__init__()
-        self.input_shape = ImageShape(height=height, width=width, channels=channels)
+
         self.class_count = class_count
 
-        self.conv1 = nn.Conv2d(
-            in_channels=self.input_shape.channels,
+        self.sConv = nn.Conv1d(
+            in_channels=channels,
             out_channels=32,
-            kernel_size=(5, 5),
-            padding=(2, 2),
+            kernel_size=8,
+            padding="same"
         )
-        self.initialise_layer(self.conv1)
-        self.batchNorm2d1 = nn.BatchNorm2d(self.conv1.out_channels)
-        self.pool1 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
 
-        # TASK 2-1: Define the second convolutional layer and initialise its parameters
-        self.conv2 = nn.Conv2d(
-            in_channels=self.conv1.out_channels,
-            out_channels=64,
-            kernel_size=(5, 5),
-            padding=(2, 2),
-        )
-        self.initialise_layer(self.conv2)
-        self.batchNorm2d2 = nn.BatchNorm2d(self.conv2.out_channels)
-        # TASK 3-1: Define the second pooling layer
-        self.pool2 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
-        # TASK 5-1: Define the first FC layer and initialise its parameters
-        self.fc1 = nn.Linear(4096, 1024)
-        self.initialise_layer(self.fc1)
-        self.batchNorm1d1 = nn.BatchNorm1d(self.fc1.out_features)
-        # TASK 6-1: Define the last FC layer and initialise its parameters
-        self.fc2 = nn.Linear(self.fc1.out_features, 10)
+        # self.conv1 = nn.Conv2d(
+        #     in_channels=self.input_shape.channels,
+        #     out_channels=32,
+        #     kernel_size=(5, 5),
+        #     padding=(2, 2),
+        # )
+        # self.initialise_layer(self.conv1)
+        # self.batchNorm2d1 = nn.BatchNorm2d(self.conv1.out_channels)
+        # self.pool1 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
+        #
+        # # TASK 2-1: Define the second convolutional layer and initialise its parameters
+        # self.conv2 = nn.Conv2d(
+        #     in_channels=self.conv1.out_channels,
+        #     out_channels=64,
+        #     kernel_size=(5, 5),
+        #     padding=(2, 2),
+        # )
+        # self.initialise_layer(self.conv2)
+        # self.batchNorm2d2 = nn.BatchNorm2d(self.conv2.out_channels)
+        # # TASK 3-1: Define the second pooling layer
+        # self.pool2 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
+        # # TASK 5-1: Define the first FC layer and initialise its parameters
+        # self.fc1 = nn.Linear(4096, 1024)
+        # self.initialise_layer(self.fc1)
+        # self.batchNorm1d1 = nn.BatchNorm1d(self.fc1.out_features)
+        # # TASK 6-1: Define the last FC layer and initialise its parameters
+        # self.fc2 = nn.Linear(self.fc1.out_features, 10)
+        #
+        # self.initialise_layer(self.fc2)
 
-        self.initialise_layer(self.fc2)
+    def forward(self, audio: torch.Tensor) -> torch.Tensor:
+        x = self.sConv(torch.flatten(audio, start_dim=1, end_dim=2))
+        print(x.shape)
+        sys.exit()
 
-    def forward(self, images: torch.Tensor) -> torch.Tensor:
-        x = F.relu(self.batchNorm2d1(self.conv1(images)))
-        x = self.pool1(x)
-        # TASK 2-2: Pass x through the second convolutional layer
-        x = F.relu(self.batchNorm2d2(self.conv2(x)))
-        # TASK 3-2: Pass x through the second pooling layer
-        x = self.pool2(x)
-        # TASK 4: Flatten the output of the pooling layer so it is of shape
-        #         (batch_size, 4096)
-        x = torch.flatten(x, start_dim=1)
-        # TASK 5-2: Pass x through the first fully connected layer
-        x = F.relu(self.batchNorm1d1(self.fc1(x)))
-        # TASK 6-2: Pass x through the last fully connected layer
-        x = self.fc2(x)
-        return x
+        return
 
     @staticmethod
     def initialise_layer(layer):
@@ -231,7 +239,8 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             self.model.train()
             data_load_start_time = time.time()
-            for batch, labels in self.train_loader:
+            print(self.train_loader)
+            for _, batch, labels in self.train_loader:
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
                 data_load_end_time = time.time()
@@ -249,7 +258,7 @@ class Trainer:
 
                 # TASK 9: Compute the loss using self.criterion and
                 #         store it in a variable called `loss`
-                loss = self.criterion(logits,  labels)
+                loss = self.criterion(logits, labels)
 
                 # TASK 10: Compute the backward pass
                 loss.backward()
@@ -379,5 +388,4 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
 
 
 if __name__ == "__main__":
-
     main(parser.parse_args())
