@@ -315,7 +315,7 @@ class Trainer:
                 data_load_start_time = time.time()
 
             self.summary_writer.add_scalar("epoch", epoch, self.step)
-            if ((epoch + 1) % val_frequency) == 0:
+            if True:
                 self.validate()
                 # self.validate() will put the model in validation mode,
                 # so we have to switch back to train mode afterwards
@@ -356,7 +356,7 @@ class Trainer:
         # results = {"preds": [], "labels": []}
         total_loss = 0
         self.model.eval()
-
+        tensor_list = []
         # No need to track gradients for validation, we're not optimizing.
         with torch.no_grad():
             for _, batch, labels in self.val_loader:
@@ -367,10 +367,12 @@ class Trainer:
                 total_loss += loss.item()
                 # preds = logits.argmax(dim=-1).cpu().numpy()
                 preds = logits
+
+                tensor_list.append(preds)
                 # results["preds"].extend(list(preds))
                 # results["labels"].extend(list(labels.cpu().numpy()))
 
-        accuracy = evaluate(preds, self.path_to_pkl)
+        accuracy = evaluate(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
         average_loss = total_loss / len(self.val_loader)
 
         self.summary_writer.add_scalars(
