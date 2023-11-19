@@ -76,13 +76,13 @@ parser.add_argument(
     help="Value of SGD momentum")
 
 parser.add_argument(
-    "--stride_conv_length",
+    "--stride-conv-length",
     default=256,
     type=int,
     help="Value of stride convolution kernel length")
 
 parser.add_argument(
-    "--stride_conv_stride",
+    "--stride-conv-stride",
     default=256,
     type=int,
     help="Value of stride convolution kernel stride")
@@ -121,7 +121,8 @@ def main(args):
         pin_memory=True,
     )
 
-    model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10)
+    model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.CrossEntropyLoss()
@@ -150,7 +151,9 @@ def main(args):
 
 
 class CNN(nn.Module):
-    def __init__(self, sub_clips: int,  channels: int, num_samples: int, class_count: int):
+    def __init__(self, sub_clips: int,  channels: int,
+                 num_samples: int, class_count: int,
+                 stride_conv_size: int, stride_conv_stride: int):
         super().__init__()
 
         self.class_count = class_count
@@ -158,8 +161,8 @@ class CNN(nn.Module):
         self.sConv = nn.Conv1d(
             in_channels=channels,
             out_channels=32,
-            kernel_size=8,
-            padding="same"
+            kernel_size=stride_conv_size,
+            stride=stride_conv_stride
         )
 
         # self.conv1 = nn.Conv2d(
@@ -193,7 +196,9 @@ class CNN(nn.Module):
         # self.initialise_layer(self.fc2)
 
     def forward(self, audio: torch.Tensor) -> torch.Tensor:
-        x = self.sConv(torch.flatten(audio, start_dim=1, end_dim=2))
+        x = audio
+        x = self.sConv(torch.reshape(x.flatten(start_dim=0),
+                                     (audio.shape[0], 1, audio.shape[1]*audio.shape[3])))
         print(x.shape)
         sys.exit()
 
