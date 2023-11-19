@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import statistics
 import sys
 import time
 from multiprocessing import cpu_count
@@ -103,7 +104,8 @@ else:
 def main(args):
     trainMagnaTagATune = MagnaTagATune(args.dataset_root + "/annotations/train_labels.pkl",
                                        args.dataset_root + "/samples")
-    validateMagnaTagATune = MagnaTagATune(args.dataset_root + "/annotations/val_labels.pkl",
+    gts_pkl_path = args.dataset_root + "/annotations/val_labels.pkl"
+    validateMagnaTagATune = MagnaTagATune(gts_pkl_path,
                                           args.dataset_root + "/samples")
 
     train_loader = torch.utils.data.DataLoader(
@@ -137,7 +139,7 @@ def main(args):
         flush_secs=5
     )
     trainer = Trainer(
-        model, train_loader, test_loader, criterion, optimizer, summary_writer, DEVICE
+        model, train_loader, test_loader, criterion, optimizer, summary_writer, DEVICE, gts_pkl_path
     )
 
     trainer.train(
@@ -242,6 +244,7 @@ class Trainer:
             optimizer: Optimizer,
             summary_writer: SummaryWriter,
             device: torch.device,
+            path_to_pkl: str,
     ):
         self.model = model.to(device)
         self.device = device
@@ -251,6 +254,7 @@ class Trainer:
         self.optimizer = optimizer
         self.summary_writer = summary_writer
         self.step = 0
+        self.path_to_pkl = path_to_pkl
 
     def train(
             self,
@@ -294,9 +298,10 @@ class Trainer:
                 with torch.no_grad():
                     # TODO:what  ?
                     # preds = logits.argmax(-1)
+
                     preds = logits
 
-                    accuracy = compute_accuracy(labels, preds)
+                    accuracy = evaluate(preds, self.path_to_pkl)
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
@@ -390,7 +395,34 @@ def compute_accuracy(
         preds: ``(batch_size, class_count)`` tensor or array containing model prediction
     """
     assert len(labels) == len(preds)
-    return float((labels == preds).sum()) / len(labels)
+    # Get the number of items in the batch (j) and the number of tags (k)
+    j, k = labels.shape
+
+    # Initialize a list to store individual AUROC scores
+    auroc_per_item = []
+
+    for i in range(j):
+        # Extract true labels and predicted probabilities for the i-th item
+        y_true_item = labels[i]
+        y_pred_item = preds[i]
+
+        # Sort predictions and true labels based on predicted probabilities
+        sorted_indices = torch.argsort(y_pred_item, descending=True)
+        y_true_sorted = y_true_item[sorted_indices]
+
+        # Count the number of true positives and false positives at each threshold
+        num_true_positives = torch.cumsum(y_true_sorted, dim=0)
+        num_false_positives = torch.cumsum(1 - y_true_sorted, dim=0)
+
+        # Compute true positive rate (sensitivity) and false positive rate
+        true_positive_rate = num_true_positives / torch.sum(y_true_item)
+        false_positive_rate = num_false_positives / torch.sum(1 - y_true_item)
+
+        # Compute AUROC using the trapezoidal rule
+        auroc = torch.trapz(true_positive_rate, false_positive_rate)
+        auroc_per_item.append(auroc.item())
+
+    return statistics.mean(auroc_per_item)
 
 
 def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
