@@ -151,58 +151,74 @@ def main(args):
 
 
 class CNN(nn.Module):
-    def __init__(self, sub_clips: int,  channels: int,
+    def __init__(self, sub_clips: int, channels: int,
                  num_samples: int, class_count: int,
                  stride_conv_size: int, stride_conv_stride: int):
         super().__init__()
 
         self.class_count = class_count
 
+        # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=32,
+            out_channels=channels,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
+        self.initialise_layer(self.sConv)
 
-        # self.conv1 = nn.Conv2d(
-        #     in_channels=self.input_shape.channels,
-        #     out_channels=32,
-        #     kernel_size=(5, 5),
-        #     padding=(2, 2),
-        # )
-        # self.initialise_layer(self.conv1)
-        # self.batchNorm2d1 = nn.BatchNorm2d(self.conv1.out_channels)
-        # self.pool1 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
-        #
-        # # TASK 2-1: Define the second convolutional layer and initialise its parameters
-        # self.conv2 = nn.Conv2d(
-        #     in_channels=self.conv1.out_channels,
-        #     out_channels=64,
-        #     kernel_size=(5, 5),
-        #     padding=(2, 2),
-        # )
-        # self.initialise_layer(self.conv2)
-        # self.batchNorm2d2 = nn.BatchNorm2d(self.conv2.out_channels)
-        # # TASK 3-1: Define the second pooling layer
-        # self.pool2 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
-        # # TASK 5-1: Define the first FC layer and initialise its parameters
-        # self.fc1 = nn.Linear(4096, 1024)
-        # self.initialise_layer(self.fc1)
-        # self.batchNorm1d1 = nn.BatchNorm1d(self.fc1.out_features)
-        # # TASK 6-1: Define the last FC layer and initialise its parameters
-        # self.fc2 = nn.Linear(self.fc1.out_features, 10)
-        #
-        # self.initialise_layer(self.fc2)
+        self.conv1d1 = nn.Conv1d(
+            in_channels=channels,
+            out_channels=channels * 32,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d1)
+        self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
+
+        self.conv1d2 = nn.Conv1d(
+            in_channels=self.conv1d1.out_channels,
+            out_channels=self.conv1d1.out_channels * 32,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d2)
+        self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
+
+        self.fc1 = None
+        self.batchNorm1d3 = None
+
+        self.fc2 = nn.Linear(100, 50)
 
     def forward(self, audio: torch.Tensor) -> torch.Tensor:
         x = audio
-        x = self.sConv(torch.reshape(x.flatten(start_dim=0),
-                                     (audio.shape[0], 1, audio.shape[1]*audio.shape[3])))
+        x = F.relu(self.sConv(torch.reshape(x.flatten(start_dim=0),
+                                            (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
+
+        x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
+        x = self.pool1(x)
+
+        x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
+        x = self.pool2(x)
+
+        x = torch.reshape(x.flatten(start_dim=0),
+                          (-1, 10, int(x.shape[1]*x.shape[2]/10)))
+        if self.fc1 is None:
+            self.fc1 = nn.Linear(x.shape[2], 100)
+            self.initialise_layer(self.fc1)
+            self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+
+        x = x.view(-1, x.shape[2])
+        x = F.sigmoid(self.batchNorm1d3(self.fc1(x)))
+
+        x = self.fc2(x).view(10, 10, 50).mean(dim=1)
+
         print(x.shape)
         sys.exit()
 
-        return
+        return x
 
     @staticmethod
     def initialise_layer(layer):
