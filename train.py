@@ -105,6 +105,7 @@ def main(args):
     trainMagnaTagATune = MagnaTagATune(args.dataset_root + "/annotations/train_labels.pkl",
                                        args.dataset_root + "/samples")
     gts_pkl_path = args.dataset_root + "/annotations/val_labels.pkl"
+
     validateMagnaTagATune = MagnaTagATune(gts_pkl_path,
                                           args.dataset_root + "/samples")
 
@@ -219,7 +220,7 @@ class CNN(nn.Module):
         x = x.view(-1, x.shape[2])
         x = F.relu(self.batchNorm1d3(self.fc1(x)))
 
-        x = torch.sigmoid(self.fc2(x).view(10, 10, 50).mean(dim=1))
+        x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).mean(dim=1))
 
         # print(x.shape)
         # sys.exit()
@@ -301,14 +302,14 @@ class Trainer:
 
                     preds = logits
 
-                    accuracy = evaluate(preds, self.path_to_pkl)
+                    # accuracy = evaluate(preds, self.path_to_pkl)
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
                 if ((self.step + 1) % log_frequency) == 0:
-                    self.log_metrics(epoch, accuracy, loss, data_load_time, step_time)
+                    self.log_metrics(epoch, 4396, loss, data_load_time, step_time)
                 if ((self.step + 1) % print_frequency) == 0:
-                    self.print_metrics(epoch, accuracy, loss, data_load_time, step_time)
+                    self.print_metrics(epoch, 4396, loss, data_load_time, step_time)
 
                 self.step += 1
                 data_load_start_time = time.time()
@@ -352,25 +353,24 @@ class Trainer:
         )
 
     def validate(self):
-        results = {"preds": [], "labels": []}
+        # results = {"preds": [], "labels": []}
         total_loss = 0
         self.model.eval()
 
         # No need to track gradients for validation, we're not optimizing.
         with torch.no_grad():
-            for batch, labels in self.val_loader:
+            for _, batch, labels in self.val_loader:
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
                 logits = self.model(batch)
                 loss = self.criterion(logits, labels)
                 total_loss += loss.item()
-                preds = logits.argmax(dim=-1).cpu().numpy()
-                results["preds"].extend(list(preds))
-                results["labels"].extend(list(labels.cpu().numpy()))
+                # preds = logits.argmax(dim=-1).cpu().numpy()
+                preds = logits
+                # results["preds"].extend(list(preds))
+                # results["labels"].extend(list(labels.cpu().numpy()))
 
-        accuracy = compute_accuracy(
-            np.array(results["labels"]), np.array(results["preds"])
-        )
+        accuracy = evaluate(preds, self.path_to_pkl)
         average_loss = total_loss / len(self.val_loader)
 
         self.summary_writer.add_scalars(
