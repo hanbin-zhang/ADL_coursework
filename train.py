@@ -218,7 +218,7 @@ class CNN(nn.Module):
         x = F.relu(self.batchNorm1d3(self.fc1(x)))
 
         x = torch.sigmoid(self.fc2(x).view(10, 10, 50).mean(dim=1))
-        print(x)
+
         # print(x.shape)
         # sys.exit()
 
@@ -292,7 +292,10 @@ class Trainer:
                 self.optimizer.zero_grad()
 
                 with torch.no_grad():
-                    preds = logits.argmax(-1)
+                    # TODO:what  ?
+                    # preds = logits.argmax(-1)
+                    preds = logits
+
                     accuracy = compute_accuracy(labels, preds)
 
                 data_load_time = data_load_end_time - data_load_start_time
