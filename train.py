@@ -125,7 +125,7 @@ def main(args):
                 stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss()
 
     # TASK 11: Define the optimizer
     optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.sgd_momentum)
@@ -187,10 +187,14 @@ class CNN(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
 
-        self.fc1 = None
-        self.batchNorm1d3 = None
+        # self.fc1 = None
+        # self.batchNorm1d3 = None
+        self.fc1 = nn.Linear(8704, 100)
+        self.initialise_layer(self.fc1)
+        self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
 
         self.fc2 = nn.Linear(100, 50)
+        self.initialise_layer(self.fc2)
 
     def forward(self, audio: torch.Tensor) -> torch.Tensor:
         x = audio
@@ -204,19 +208,19 @@ class CNN(nn.Module):
         x = self.pool2(x)
 
         x = torch.reshape(x.flatten(start_dim=0),
-                          (-1, 10, int(x.shape[1]*x.shape[2]/10)))
-        if self.fc1 is None:
-            self.fc1 = nn.Linear(x.shape[2], 100)
-            self.initialise_layer(self.fc1)
-            self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+                          (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
+        # if self.fc1 is None:
+        #     self.fc1 = nn.Linear(x.shape[2], 100)
+        #     self.initialise_layer(self.fc1)
+        #     self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
 
         x = x.view(-1, x.shape[2])
-        x = F.sigmoid(self.batchNorm1d3(self.fc1(x)))
+        x = F.relu(self.batchNorm1d3(self.fc1(x)))
 
-        x = self.fc2(x).view(10, 10, 50).mean(dim=1)
-
-        print(x.shape)
-        sys.exit()
+        x = torch.sigmoid(self.fc2(x).view(10, 10, 50).mean(dim=1))
+        print(x)
+        # print(x.shape)
+        # sys.exit()
 
         return x
 
@@ -399,6 +403,7 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
         untangle in TB).
     """
     tb_log_dir_prefix = f'CNN_bn_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
+    tb_log_dir_prefix += f'strde_conv_size,stride({args.stride_conv_length}, {args.stride_conv_stride})_'
     i = 0
     while i < 1000:
         tb_log_dir = args.log_dir / (tb_log_dir_prefix + str(i))
