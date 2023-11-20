@@ -265,11 +265,10 @@ class Trainer:
             log_frequency: int = 5,
             start_epoch: int = 0
     ):
-        self.model.train()
+        # self.model.train()
         for epoch in range(start_epoch, epochs):
             self.model.train()
             data_load_start_time = time.time()
-            print(self.train_loader)
             for _, batch, labels in self.train_loader:
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
