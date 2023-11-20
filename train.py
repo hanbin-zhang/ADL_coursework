@@ -164,14 +164,14 @@ class CNN(nn.Module):
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=channels,
+            out_channels=channels*32,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
         self.initialise_layer(self.sConv)
 
         self.conv1d1 = nn.Conv1d(
-            in_channels=channels,
+            in_channels=channels * 32,
             out_channels=channels * 32,
             kernel_size=8,
             padding='same'
@@ -296,13 +296,13 @@ class Trainer:
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
-                with torch.no_grad():
-                    # TODO:what  ?
-                    # preds = logits.argmax(-1)
-
-                    preds = logits
-
-                    # accuracy = evaluate(preds, self.path_to_pkl)
+                # with torch.no_grad():
+                #     # TODO:what  ?
+                #     # preds = logits.argmax(-1)
+                #
+                #     preds = logits
+                #
+                #     # accuracy = evaluate(preds, self.path_to_pkl)
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
