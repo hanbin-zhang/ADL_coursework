@@ -15,4 +15,4 @@ module purge
 # load in the module dependencies for this script
 module load "languages/anaconda3/2021-3.8.8-cuda-11.1-pytorch"
 
-python train.py --learning-rate 0.1153 --sgd-momentum 0.9
+python train.py --learning-rate 0.1135 --sgd-momentum 0.9
