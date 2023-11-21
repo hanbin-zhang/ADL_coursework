@@ -295,14 +295,6 @@ class Trainer:
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
-                # with torch.no_grad():
-                #     # TODO:what  ?
-                #     # preds = logits.argmax(-1)
-                #
-                #     preds = logits
-                #
-                #     # accuracy = evaluate(preds, self.path_to_pkl)
-
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
                 if ((self.step + 1) % log_frequency) == 0:
