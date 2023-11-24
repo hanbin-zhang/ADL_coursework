@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import statistics
-import sys
 import time
 from multiprocessing import cpu_count
 from typing import Union, NamedTuple
@@ -10,11 +9,9 @@ import torch.backends.cudnn
 import numpy as np
 from torch import nn, optim
 from torch.nn import functional as F
-import torchvision.datasets
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
 
 import argparse
 from pathlib import Path
@@ -115,7 +112,7 @@ def initialize_optimizer(model, args):
     elif args.optimizer == 'adam':
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     elif args.optimizer == 'adamW':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
     else:
         raise ValueError(f"Unsupported optimizer: {args.optimizer}")
 
