@@ -152,6 +152,7 @@ def main(args):
     criterion = nn.BCELoss()
 
     # TASK 11: Define the optimizer
+    print(args.optimizer)
     optimizer = initialize_optimizer(model, args)
 
     log_dir = get_summary_writer_log_dir(args)
@@ -191,6 +192,8 @@ class CNN(nn.Module):
         )
         self.initialise_layer(self.sConv)
 
+        self.poolsC = nn.AdaptiveAvgPool1d(output_size=1365)
+
         self.conv1d1 = nn.Conv1d(
             in_channels=channels * 32,
             out_channels=channels * 32,
@@ -225,6 +228,8 @@ class CNN(nn.Module):
         x = F.relu(self.sConv(torch.reshape(x.flatten(start_dim=0),
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
+        # x = self.poolsC(x)
+
         x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
 
@@ -241,10 +246,9 @@ class CNN(nn.Module):
         x = x.view(-1, x.shape[2])
         x = F.relu(self.batchNorm1d3(self.fc1(x)))
 
+        # x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50)).mean(dim=1)
         x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).mean(dim=1))
-
-        # print(x.shape)
-        # sys.exit()
+        # x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).max(dim=1).values)
 
         return x
 
