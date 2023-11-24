@@ -70,11 +70,19 @@ parser.add_argument(
     help="Number of worker processes used to load data.",
 )
 
+# Add a string argument with allowed values
+parser.add_argument(
+    '--optimizer',
+    type=str,
+    choices=['sgd', 'adam', 'adamW'],
+    default='sgd',
+    help='Specify an optimizer (sgd, adam, adamW).')
+
 parser.add_argument(
     "--sgd-momentum",
     default=0,
     type=float,
-    help="Value of SGD momentum")
+    help="Value of SGD momentum, only works when optimizer specify to 'sgd'")
 
 parser.add_argument(
     "--stride-conv-length",
@@ -99,6 +107,19 @@ if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 else:
     DEVICE = torch.device("cpu")
+
+
+def initialize_optimizer(model, args):
+    if args.optimizer == 'sgd':
+        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.sgd_momentum)
+    elif args.optimizer == 'adam':
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    elif args.optimizer == 'adamW':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+    else:
+        raise ValueError(f"Unsupported optimizer: {args.optimizer}")
+
+    return optimizer
 
 
 def main(args):
@@ -131,9 +152,8 @@ def main(args):
     criterion = nn.BCELoss()
 
     # TASK 11: Define the optimizer
-    # optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.sgd_momentum)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    optimizer = initialize_optimizer(model, args)
+
     log_dir = get_summary_writer_log_dir(args)
     print(f"Writing logs to {log_dir}")
     summary_writer = SummaryWriter(
