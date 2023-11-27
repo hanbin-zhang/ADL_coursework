@@ -401,45 +401,6 @@ class Trainer:
         print(f"validation loss: {average_loss:.5f}, accuracy: {accuracy * 100:2.2f}")
 
 
-def compute_accuracy(
-        labels: Union[torch.Tensor, np.ndarray], preds: Union[torch.Tensor, np.ndarray]
-) -> float:
-    """
-    Args:
-        labels: ``(batch_size, class_count)`` tensor or array containing example labels
-        preds: ``(batch_size, class_count)`` tensor or array containing model prediction
-    """
-    assert len(labels) == len(preds)
-    # Get the number of items in the batch (j) and the number of tags (k)
-    j, k = labels.shape
-
-    # Initialize a list to store individual AUROC scores
-    auroc_per_item = []
-
-    for i in range(j):
-        # Extract true labels and predicted probabilities for the i-th item
-        y_true_item = labels[i]
-        y_pred_item = preds[i]
-
-        # Sort predictions and true labels based on predicted probabilities
-        sorted_indices = torch.argsort(y_pred_item, descending=True)
-        y_true_sorted = y_true_item[sorted_indices]
-
-        # Count the number of true positives and false positives at each threshold
-        num_true_positives = torch.cumsum(y_true_sorted, dim=0)
-        num_false_positives = torch.cumsum(1 - y_true_sorted, dim=0)
-
-        # Compute true positive rate (sensitivity) and false positive rate
-        true_positive_rate = num_true_positives / torch.sum(y_true_item)
-        false_positive_rate = num_false_positives / torch.sum(1 - y_true_item)
-
-        # Compute AUROC using the trapezoidal rule
-        auroc = torch.trapz(true_positive_rate, false_positive_rate)
-        auroc_per_item.append(auroc.item())
-
-    return statistics.mean(auroc_per_item)
-
-
 def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
     """Get a unique directory that hasn't been logged to before for use with a TB
     SummaryWriter.
