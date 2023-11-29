@@ -219,6 +219,7 @@ class CNN(nn.Module):
         self.initialise_layer(self.conv1d2)
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
+        self.dropout2 = nn.Dropout1d(p=dropout_ratio)
 
         # self.fc1 = None
         # self.batchNorm1d3 = None
@@ -236,10 +237,12 @@ class CNN(nn.Module):
 
         # x = self.poolsC(x)
         residual = x.clone()
-        x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
-        # x = self.pool1(x)
+        x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x)))+residual)
+        x = self.pool1(x)
 
-        x = F.relu(self.batchNorm1d2(self.conv1d2(x))+residual)
+        residual1 = x.clone()
+        x = self.dropout2(F.relu(self.batchNorm1d2(self.conv1d2(x))+residual1))
+        # Specify the padding values
         x = self.pool2(x)
 
         x = torch.reshape(x.flatten(start_dim=0),
