@@ -287,7 +287,6 @@ class Trainer:
             log_frequency: int = 5,
             start_epoch: int = 0
     ):
-        # self.model.train()
         for epoch in range(start_epoch, epochs):
             self.model.train()
             data_load_start_time = time.time()
