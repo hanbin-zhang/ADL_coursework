@@ -93,6 +93,12 @@ parser.add_argument(
     type=int,
     help="Value of stride convolution kernel stride")
 
+parser.add_argument(
+    "--dropout",
+    default=0.2,
+    type=float,
+    help="Value of dropout ratio")
+
 
 class ImageShape(NamedTuple):
     height: int
@@ -143,7 +149,8 @@ def main(args):
     )
 
     model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
+                dropout_ratio=args.dropout)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.BCELoss()
@@ -175,7 +182,8 @@ def main(args):
 class CNN(nn.Module):
     def __init__(self, sub_clips: int, channels: int,
                  num_samples: int, class_count: int,
-                 stride_conv_size: int, stride_conv_stride: int):
+                 stride_conv_size: int, stride_conv_stride: int,
+                 dropout_ratio: float):
         super().__init__()
 
         self.class_count = class_count
@@ -198,6 +206,7 @@ class CNN(nn.Module):
             padding='same'
         )
         self.initialise_layer(self.conv1d1)
+        self.dropout1 = nn.Dropout1d(p=dropout_ratio)
         self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
 
@@ -227,7 +236,7 @@ class CNN(nn.Module):
 
         # x = self.poolsC(x)
         residual = x.clone()
-        x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
+        x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
         # x = self.pool1(x)
 
         x = F.relu(self.batchNorm1d2(self.conv1d2(x))+residual)
