@@ -7,6 +7,7 @@ from typing import Union, NamedTuple
 import torch
 import torch.backends.cudnn
 import numpy as np
+from sklearn.metrics import roc_auc_score
 from torch import nn, optim
 from torch.nn import functional as F
 from torch.optim.optimizer import Optimizer
@@ -226,7 +227,7 @@ class CNN(nn.Module):
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
         # x = self.poolsC(x)
-        # residual = x.clone()
+
         x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
@@ -234,6 +235,7 @@ class CNN(nn.Module):
         # print(residual.shape)
         # x = x+residual
         x = self.pool2(x)
+        # x = self.dropout1(x)
 
         x = torch.reshape(x.flatten(start_dim=0),
                           (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
@@ -288,6 +290,10 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             self.model.train()
             data_load_start_time = time.time()
+
+            all_labels = []
+            model_outs = []
+            total_loss = 0
             for _, batch, labels in self.train_loader:
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
@@ -295,10 +301,6 @@ class Trainer:
 
                 # TASK 1: Compute the forward pass of the model, print the output shape
                 #         and quit the program
-                # output = self.model.forward(batch)
-                # print(output.shape)
-                # import sys
-                # sys.exit(1)
 
                 # TASK 7: Rename `output` to `logits`, remove the output shape printing
                 #         and get rid of the `import sys; sys.exit(1)`
@@ -308,6 +310,12 @@ class Trainer:
                 #         store it in a variable called `loss`
                 loss = self.criterion(logits, labels)
 
+                # Compute accuracy
+                all_labels.append(labels)
+                model_outs.append(logits.detach())
+
+                total_loss += loss.item()
+
                 # TASK 10: Compute the backward pass
                 loss.backward()
                 # TASK 12: Step the optimizer and then zero out the gradient buffers.
@@ -316,15 +324,19 @@ class Trainer:
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
-                if ((self.step + 1) % log_frequency) == 0:
-                    self.log_metrics(epoch, 4396, loss, data_load_time, step_time)
+                # if ((self.step + 1) % log_frequency) == 0:
+                #     self.log_metrics(epoch, 4396, loss, data_load_time, step_time)
                 if ((self.step + 1) % print_frequency) == 0:
                     self.print_metrics(epoch, 4396, loss, data_load_time, step_time)
 
                 self.step += 1
                 data_load_start_time = time.time()
 
-            self.summary_writer.add_scalar("epoch", epoch, self.step)
+            epoch_loss = total_loss / len(self.train_loader)
+            all_labels = torch.cat(all_labels, dim=0).cpu().numpy()
+            model_outs = torch.cat(model_outs, dim=0).cpu().numpy().astype(float)
+            self.log_train_metrics(epoch, roc_auc_score(y_true=all_labels, y_score=model_outs), epoch_loss)
+            # self.summary_writer.add_scalar("epoch", epoch, self.step)
             if True:
                 self.validate()
                 # self.validate() will put the model in validation mode,
@@ -360,6 +372,19 @@ class Trainer:
         )
         self.summary_writer.add_scalar(
             "time/data", step_time, self.step
+        )
+
+    def log_train_metrics(self, epoch, accuracy, loss):
+        self.summary_writer.add_scalar("epoch", epoch, self.step)
+        self.summary_writer.add_scalars(
+            "accuracy",
+            {"train": accuracy},
+            self.step
+        )
+        self.summary_writer.add_scalars(
+            "loss",
+            {"train": float(loss)},
+            self.step
         )
 
     def validate(self):
@@ -410,8 +435,10 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
         from getting logged to the same TB log directory (which you can't easily
         untangle in TB).
     """
-    tb_log_dir_prefix = f'CNN_bn_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
+    tb_log_dir_prefix = f'CNN_MIR_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
     tb_log_dir_prefix += f'strde_conv_size,stride({args.stride_conv_length}, {args.stride_conv_stride})_'
+    tb_log_dir_prefix += f'optimizer={args.optimizer}_'
+
     i = 0
     while i < 1000:
         tb_log_dir = args.log_dir / (tb_log_dir_prefix + str(i))
