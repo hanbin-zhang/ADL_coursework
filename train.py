@@ -227,8 +227,9 @@ class CNN(nn.Module):
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
         # x = self.poolsC(x)
-        residual = x.clone()
-        x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
+        # residual = x.clone()
+        # x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
+        x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
 
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
@@ -236,6 +237,10 @@ class CNN(nn.Module):
 
         x = torch.reshape(x.flatten(start_dim=0),
                           (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
+        # if self.fc1 is None:
+        #     self.fc1 = nn.Linear(x.shape[2], 100)
+        #     self.initialise_layer(self.fc1)
+        #     self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
 
         x = x.view(-1, x.shape[2])
         x = F.relu(self.batchNorm1d3(self.fc1(x)))
