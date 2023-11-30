@@ -7,6 +7,7 @@ from typing import Union, NamedTuple
 import torch
 import torch.backends.cudnn
 import numpy as np
+from sklearn.metrics import roc_auc_score
 from torch import nn, optim
 from torch.nn import functional as F
 from torch.optim.optimizer import Optimizer
@@ -234,7 +235,7 @@ class CNN(nn.Module):
 
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
         x = self.pool2(x)
-        x = self.dropout1(x)
+        # x = self.dropout1(x)
 
         x = torch.reshape(x.flatten(start_dim=0),
                           (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
@@ -294,8 +295,8 @@ class Trainer:
             self.model.train()
             data_load_start_time = time.time()
 
-            total_correct = 0
-            total_samples = 0
+            all_labels = []
+            model_outs = []
             total_loss = 0
             for _, batch, labels in self.train_loader:
                 batch = batch.to(self.device)
@@ -314,10 +315,9 @@ class Trainer:
                 loss = self.criterion(logits, labels)
 
                 # Compute accuracy
-                predictions = torch.argmax(logits, dim=1)
-                correct = torch.sum(predictions == labels).item()
-                total_correct += correct
-                total_samples += labels.size(0)
+                all_labels.append(labels)
+                model_outs.append(logits)
+
                 total_loss += loss.item()
 
                 # TASK 10: Compute the backward pass
@@ -337,8 +337,9 @@ class Trainer:
                 data_load_start_time = time.time()
 
             epoch_loss = total_loss / len(self.train_loader)
-            epoch_accuracy = total_correct / total_samples
-            self.log_train_metrics(epoch, epoch_accuracy, epoch_loss)
+            all_labels = torch.cat(all_labels, dim=0).cpu().numpy()
+            model_outs = torch.cat(model_outs, dim=0).cpu().numpy().astype(float)
+            self.log_train_metrics(epoch, roc_auc_score(y_true=all_labels, y_score=model_outs), epoch_loss)
             # self.summary_writer.add_scalar("epoch", epoch, self.step)
             if True:
                 self.validate()
