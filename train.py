@@ -228,9 +228,9 @@ class CNN(nn.Module):
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
         # x = self.poolsC(x)
-        # residual = x.clone()
-        # x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
-        x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
+        residual = x.clone()
+        x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))+residual))
+        # x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
 
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
