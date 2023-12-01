@@ -442,7 +442,7 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
     tb_log_dir_prefix = f'CNN_MIR_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
     tb_log_dir_prefix += f'strde_conv_size,stride({args.stride_conv_length}, {args.stride_conv_stride})_'
     tb_log_dir_prefix += f'optimizer={args.optimizer}_'
-    tb_log_dir_prefix += f'more_kernel_'
+    tb_log_dir_prefix += f'more_kernel_resnet_'
 
     i = 0
     while i < 1000:
