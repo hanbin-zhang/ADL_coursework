@@ -20,6 +20,8 @@ from pathlib import Path
 from dataset import MagnaTagATune
 from evaluation import evaluate
 
+import pandas as pd
+
 torch.backends.cudnn.benchmark = True
 
 parser = argparse.ArgumentParser(
@@ -160,7 +162,8 @@ def main(args):
         flush_secs=5
     )
     trainer = Trainer(
-        model, train_loader, test_loader, criterion, optimizer, summary_writer, DEVICE, gts_pkl_path
+        model, train_loader, test_loader, criterion, optimizer,
+        summary_writer, DEVICE, gts_pkl_path, validateMagnaTagATune
     )
 
     trainer.train(
@@ -169,6 +172,12 @@ def main(args):
         print_frequency=args.print_frequency,
         log_frequency=args.log_frequency,
     )
+
+    # save the model
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        # Add any other information you want to save
+    }, 'model.pth')
 
     summary_writer.close()
 
@@ -284,6 +293,7 @@ class Trainer:
             summary_writer: SummaryWriter,
             device: torch.device,
             path_to_pkl: str,
+            val_data_getter: MagnaTagATune
     ):
         self.model = model.to(device)
         self.device = device
@@ -294,6 +304,7 @@ class Trainer:
         self.summary_writer = summary_writer
         self.step = 0
         self.path_to_pkl = path_to_pkl
+        self.val_data_getter =val_data_getter
 
     def train(
             self,
@@ -353,10 +364,14 @@ class Trainer:
             model_outs = torch.cat(model_outs, dim=0).cpu().numpy().astype(float)
             self.log_train_metrics(epoch, roc_auc_score(y_true=all_labels, y_score=model_outs), epoch_loss)
             # self.summary_writer.add_scalar("epoch", epoch, self.step)
-            if True:
+            if epoch < epochs-1:
                 self.validate()
+
                 # self.validate() will put the model in validation mode,
                 # so we have to switch back to train mode afterwards
+                self.model.train()
+            else:
+                self.validate(isLast=True)
                 self.model.train()
 
     def print_metrics(self, epoch, accuracy, loss, data_load_time, step_time):
@@ -403,7 +418,7 @@ class Trainer:
             self.step
         )
 
-    def validate(self):
+    def validate(self, isLast=False):
         # results = {"preds": [], "labels": []}
         total_loss = 0
         self.model.eval()
@@ -425,7 +440,8 @@ class Trainer:
 
         accuracy = evaluate(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
         average_loss = total_loss / len(self.val_loader)
-
+        if isLast:
+            self.find_cases(torch.cat(tensor_list, dim=0).cuda())
         self.summary_writer.add_scalars(
             "accuracy",
             {"test": accuracy},
@@ -437,6 +453,36 @@ class Trainer:
             self.step
         )
         print(f"validation loss: {average_loss:.5f}, accuracy: {accuracy * 100:2.2f}")
+
+    def find_cases(self, preds):
+        scores = {}
+
+        gts = pd.read_pickle(self.path_to_pkl)
+
+        labels = []
+        model_outs = []
+        for i in range(len(preds)):
+            # labels.append(gts[i][2].numpy())                             # A 50D Ground Truth binary vector
+            labels.append(np.array(gts.iloc[i]['label']).astype(float))  # A 50D Ground Truth binary vector
+            model_outs.append(preds[i].cpu().numpy())  # A 50D vector that assigns probability to each class
+
+        labels = np.array(labels).astype(float)
+        model_outs = np.array(model_outs)
+
+        for i in range(labels.shape[0]):
+            name, _, _ = self.val_data_getter.__getitem__(i)
+            auc_score_average = roc_auc_score(y_true=labels[i], y_score=model_outs[i],
+                                              average=None)
+            auc_score = roc_auc_score(y_true=labels[i], y_score=model_outs[i])
+            scores[auc_score] = (auc_score_average, labels[i], model_outs[i], name)
+        print(len(scores.items()))
+        scores = dict(sorted(scores.items()))
+        print(list(scores.items())[0])
+        print(list(scores.items())[1])
+        print(list(scores.items())[-2])
+        print(list(scores.items())[-1])
+        print(len(scores.items()))
+        print(labels.shape[0])
 
 
 def get_summary_writer_log_dir(args: argparse.Namespace) -> str:

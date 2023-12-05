@@ -4,6 +4,7 @@ import torch
 
 from sklearn.metrics import roc_auc_score
 
+
 def evaluate(preds, gts_path):
     """
     Given the list of all model outputs (logits), and the path to the ground
@@ -24,8 +25,8 @@ def evaluate(preds, gts_path):
     model_outs = []
     for i in range(len(preds)):
         # labels.append(gts[i][2].numpy())                             # A 50D Ground Truth binary vector
-        labels.append(np.array(gts.iloc[i]['label']).astype(float))    # A 50D Ground Truth binary vector
-        model_outs.append(preds[i].cpu().numpy()) # A 50D vector that assigns probability to each class
+        labels.append(np.array(gts.iloc[i]['label']).astype(float))  # A 50D Ground Truth binary vector
+        model_outs.append(preds[i].cpu().numpy())  # A 50D vector that assigns probability to each class
 
     labels = np.array(labels).astype(float)
     model_outs = np.array(model_outs)
@@ -39,4 +40,4 @@ def evaluate(preds, gts_path):
     print()
     print("-------------------------------------------------------------")
 
-    return auc_score # Return scores if you wish to save to a file
+    return auc_score  # Return scores if you wish to save to a file
