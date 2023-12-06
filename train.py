@@ -129,7 +129,6 @@ def main(args):
 
     validateMagnaTagATune = MagnaTagATune(gts_pkl_path,
                                           args.dataset_root + "/samples")
-
     train_loader = torch.utils.data.DataLoader(
         trainMagnaTagATune,
         shuffle=True,
@@ -193,7 +192,7 @@ class CNN(nn.Module):
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=channels*32,
+            out_channels=channels * 32,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
@@ -282,6 +281,27 @@ class CNN(nn.Module):
             nn.init.kaiming_normal_(layer.weight)
 
 
+def find_per_class_accucy(preds, gts_path):
+    # gts = torch.load(gts_path, map_location='cpu') # Ground truth labels, pass path to val.pkl
+    gts = pd.read_pickle(gts_path)
+
+    labels = []
+    model_outs = []
+    for i in range(len(preds)):
+        # labels.append(gts[i][2].numpy())                             # A 50D Ground Truth binary vector
+        labels.append(np.array(gts.iloc[i]['label']).astype(float))  # A 50D Ground Truth binary vector
+        model_outs.append(preds[i].cpu().numpy())  # A 50D vector that assigns probability to each class
+
+    labels = np.array(labels).astype(float)
+    model_outs = np.array(model_outs)
+
+    auc_score = roc_auc_score(y_true=labels, y_score=model_outs, average=None)
+
+    print(auc_score)
+
+    return
+
+
 class Trainer:
     def __init__(
             self,
@@ -304,7 +324,7 @@ class Trainer:
         self.summary_writer = summary_writer
         self.step = 0
         self.path_to_pkl = path_to_pkl
-        self.val_data_getter =val_data_getter
+        self.val_data_getter = val_data_getter
 
     def train(
             self,
@@ -364,7 +384,7 @@ class Trainer:
             model_outs = torch.cat(model_outs, dim=0).cpu().numpy().astype(float)
             self.log_train_metrics(epoch, roc_auc_score(y_true=all_labels, y_score=model_outs), epoch_loss)
             # self.summary_writer.add_scalar("epoch", epoch, self.step)
-            if epoch < epochs-1:
+            if epoch < epochs - 1:
                 self.validate()
 
                 # self.validate() will put the model in validation mode,
@@ -442,6 +462,7 @@ class Trainer:
         average_loss = total_loss / len(self.val_loader)
         if isLast:
             self.find_cases(torch.cat(tensor_list, dim=0).cuda())
+            find_per_class_accucy(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
         self.summary_writer.add_scalars(
             "accuracy",
             {"test": accuracy},
