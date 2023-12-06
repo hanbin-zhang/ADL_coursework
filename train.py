@@ -94,6 +94,12 @@ parser.add_argument(
     type=int,
     help="Value of stride convolution kernel stride")
 
+parser.add_argument(
+    "--dropout",
+    default=0.2,
+    type=float,
+    help="Value of dropout parameter")
+
 
 class ImageShape(NamedTuple):
     height: int
@@ -144,7 +150,8 @@ def main(args):
     )
 
     model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
+                dropout_ratio=args.dropout)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.BCELoss()
@@ -182,7 +189,8 @@ def main(args):
 class CNN(nn.Module):
     def __init__(self, sub_clips: int, channels: int,
                  num_samples: int, class_count: int,
-                 stride_conv_size: int, stride_conv_stride: int):
+                 stride_conv_size: int, stride_conv_stride: int,
+                 dropout_ratio: float):
         super().__init__()
 
         self.class_count = class_count
@@ -196,15 +204,13 @@ class CNN(nn.Module):
         )
         self.initialise_layer(self.sConv)
 
-        self.poolsC = nn.AdaptiveAvgPool1d(output_size=1365)
-
         self.conv1d1 = nn.Conv1d(
             in_channels=channels * 32,
             out_channels=channels * 32,
             kernel_size=8,
             padding='same'
         )
-        self.dropout1 = nn.Dropout1d(p=0.2)
+
         self.initialise_layer(self.conv1d1)
         self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
@@ -219,11 +225,41 @@ class CNN(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
 
-        # self.fc1 = None
-        # self.batchNorm1d3 = None
+        self.conv1d3 = nn.Conv1d(
+            in_channels=self.conv1d2.out_channels,
+            out_channels=self.conv1d2.out_channels,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d3)
+        self.pool3 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d3 = nn.BatchNorm1d(self.conv1d3.out_channels)
+
+        self.conv1d4 = nn.Conv1d(
+            in_channels=self.conv1d3.out_channels,
+            out_channels=self.conv1d3.out_channels,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d4)
+        self.batchNorm1d4 = nn.BatchNorm1d(self.conv1d4.out_channels)
+
+        self.dropout1 = nn.Dropout1d(p=dropout_ratio)
+
+        self.conv1d5 = nn.Conv1d(
+            in_channels=self.conv1d4.out_channels,
+            out_channels=self.conv1d4.out_channels,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d5)
+        self.batchNorm1d5 = nn.BatchNorm1d(self.conv1d5.out_channels)
+
+        self.poolFinal = nn.MaxPool1d(kernel_size=4, stride=4)
+
         self.fc1 = nn.Linear(8704, 100)
         self.initialise_layer(self.fc1)
-        self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+        self.batchNorm1dfc1 = nn.BatchNorm1d(self.fc1.out_features)
 
         self.fc2 = nn.Linear(100, 50)
         self.initialise_layer(self.fc2)
@@ -233,29 +269,36 @@ class CNN(nn.Module):
         x = F.relu(self.sConv(torch.reshape(x.flatten(start_dim=0),
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
-        # x = self.poolsC(x)
-        # residual = x.clone()
-        # x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
-        x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
-        x = self.pool1(x)
+        x = self.pool1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
+        x = self.pool2(F.relu(self.batchNorm1d2(self.conv1d2(x))))
+        x = self.pool3(F.relu(self.batchNorm1d3(self.conv1d3(x))))
 
-        x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
-        x = self.pool2(x)
-        # x = self.dropout1(x)
+        residual = x.clone()
 
-        x = torch.reshape(x.flatten(start_dim=0),
-                          (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
-        # if self.fc1 is None:
-        #     self.fc1 = nn.Linear(x.shape[2], 100)
-        #     self.initialise_layer(self.fc1)
-        #     self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+        x = self.dropout1(F.relu(self.batchNorm1d4(self.conv1d4(x))))
+        x = self.poolFinal(F.relu(self.batchNorm1d5(self.conv1d5(x))+residual))
+
+        x = torch.reshape(x, (audio.size(0), -1))
+        # Check if the size of the last dimension is not a multiple of 10
+        if x.size(1) % 10 != 0:
+            # Calculate the padding needed to make the size a multiple of 10
+            padding_size = (10 - x.size(1) % 10) % 10
+
+            # Pad the last dimension
+            x = F.pad(x, (0, padding_size))
+
+        x = torch.reshape(x,
+                          (audio.size(0), 10, -1))
 
         x = x.view(-1, x.shape[2])
-        x = F.relu(self.batchNorm1d3(self.fc1(x)))
+        fc_input_size = x.size(1)
 
-        # x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50)).mean(dim=1)
+        # Update fc layer sizes if necessary
+        if self.fc1.in_features != fc_input_size:
+            self.fc1 = nn.Linear(fc_input_size, 100).to(x.device)
+            self.initialise_layer(self.fc1)
+        x = F.relu(self.batchNorm1dfc1(self.fc1(x)))
         x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).mean(dim=1))
-        # x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).max(dim=1).values)
 
         return x
 
@@ -448,7 +491,7 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
     tb_log_dir_prefix = f'CNN_MIR_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
     tb_log_dir_prefix += f'strde_conv_size,stride({args.stride_conv_length}, {args.stride_conv_stride})_'
     tb_log_dir_prefix += f'optimizer={args.optimizer}_'
-    tb_log_dir_prefix += f'more_kernel_'
+    tb_log_dir_prefix += f'ULTIMATE_archi_'
 
     i = 0
     while i < 1000:
