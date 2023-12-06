@@ -20,6 +20,8 @@ from pathlib import Path
 from dataset import MagnaTagATune
 from evaluation import evaluate
 
+import pandas as pd
+
 torch.backends.cudnn.benchmark = True
 
 parser = argparse.ArgumentParser(
@@ -127,7 +129,6 @@ def main(args):
 
     validateMagnaTagATune = MagnaTagATune(gts_pkl_path,
                                           args.dataset_root + "/samples")
-
     train_loader = torch.utils.data.DataLoader(
         trainMagnaTagATune,
         shuffle=True,
@@ -160,7 +161,8 @@ def main(args):
         flush_secs=5
     )
     trainer = Trainer(
-        model, train_loader, test_loader, criterion, optimizer, summary_writer, DEVICE, gts_pkl_path
+        model, train_loader, test_loader, criterion, optimizer,
+        summary_writer, DEVICE, gts_pkl_path, validateMagnaTagATune
     )
 
     trainer.train(
@@ -169,6 +171,12 @@ def main(args):
         print_frequency=args.print_frequency,
         log_frequency=args.log_frequency,
     )
+
+    # save the model
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        # Add any other information you want to save
+    }, 'model.pth')
 
     summary_writer.close()
 
@@ -184,7 +192,7 @@ class CNN(nn.Module):
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=channels*32,
+            out_channels=channels * 32,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
@@ -194,18 +202,17 @@ class CNN(nn.Module):
 
         self.conv1d1 = nn.Conv1d(
             in_channels=channels * 32,
-            out_channels=channels * 32,
+            out_channels=32,
             kernel_size=8,
             padding='same'
         )
-        self.dropout1 = nn.Dropout1d(p=0.2)
         self.initialise_layer(self.conv1d1)
         self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
 
         self.conv1d2 = nn.Conv1d(
             in_channels=self.conv1d1.out_channels,
-            out_channels=self.conv1d1.out_channels * 32,
+            out_channels=32,
             kernel_size=8,
             padding='same'
         )
@@ -213,10 +220,11 @@ class CNN(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
 
-        # self.fc1 = None
-        # self.batchNorm1d3 = None
-        self.fc1 = nn.Linear(8704, 100)
-        self.initialise_layer(self.fc1)
+        conv1_output_size = ((num_samples - stride_conv_size) // stride_conv_stride) + 1
+        conv1_output_size = int(conv1_output_size)
+
+        self.fc1 = nn.Linear(1, 100)
+        # self.initialise_layer(self.fc1)
         self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
 
         self.fc2 = nn.Linear(100, 50)
@@ -228,23 +236,35 @@ class CNN(nn.Module):
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
         # x = self.poolsC(x)
-        # residual = x.clone()
-        # x = self.dropout1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
+
         x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
-
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
+        # print(x.shape)
+        # print(residual.shape)
+        # x = x+residual
         x = self.pool2(x)
         # x = self.dropout1(x)
+        # Reshape to (10, -1)
+        x = torch.reshape(x, (audio.size(0), -1))
+        # Check if the size of the last dimension is not a multiple of 10
+        if x.size(1) % 10 != 0:
+            # Calculate the padding needed to make the size a multiple of 10
+            padding_size = (10 - x.size(1) % 10) % 10
 
-        x = torch.reshape(x.flatten(start_dim=0),
-                          (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
-        # if self.fc1 is None:
-        #     self.fc1 = nn.Linear(x.shape[2], 100)
-        #     self.initialise_layer(self.fc1)
-        #     self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+            # Pad the last dimension
+            x = F.pad(x, (0, padding_size))
+
+        x = torch.reshape(x,
+                          (audio.size(0), 10, -1))
 
         x = x.view(-1, x.shape[2])
+        fc_input_size = x.size(1)
+
+        # Update fc layer sizes if necessary
+        if self.fc1.in_features != fc_input_size:
+            self.fc1 = nn.Linear(fc_input_size, 100).to(x.device)
+            self.initialise_layer(self.fc1)
         x = F.relu(self.batchNorm1d3(self.fc1(x)))
 
         # x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50)).mean(dim=1)
@@ -261,6 +281,27 @@ class CNN(nn.Module):
             nn.init.kaiming_normal_(layer.weight)
 
 
+def find_per_class_accucy(preds, gts_path):
+    # gts = torch.load(gts_path, map_location='cpu') # Ground truth labels, pass path to val.pkl
+    gts = pd.read_pickle(gts_path)
+
+    labels = []
+    model_outs = []
+    for i in range(len(preds)):
+        # labels.append(gts[i][2].numpy())                             # A 50D Ground Truth binary vector
+        labels.append(np.array(gts.iloc[i]['label']).astype(float))  # A 50D Ground Truth binary vector
+        model_outs.append(preds[i].cpu().numpy())  # A 50D vector that assigns probability to each class
+
+    labels = np.array(labels).astype(float)
+    model_outs = np.array(model_outs)
+
+    auc_score = roc_auc_score(y_true=labels, y_score=model_outs, average=None)
+
+    print(auc_score)
+
+    return
+
+
 class Trainer:
     def __init__(
             self,
@@ -272,6 +313,7 @@ class Trainer:
             summary_writer: SummaryWriter,
             device: torch.device,
             path_to_pkl: str,
+            val_data_getter: MagnaTagATune
     ):
         self.model = model.to(device)
         self.device = device
@@ -282,6 +324,7 @@ class Trainer:
         self.summary_writer = summary_writer
         self.step = 0
         self.path_to_pkl = path_to_pkl
+        self.val_data_getter = val_data_getter
 
     def train(
             self,
@@ -341,10 +384,14 @@ class Trainer:
             model_outs = torch.cat(model_outs, dim=0).cpu().numpy().astype(float)
             self.log_train_metrics(epoch, roc_auc_score(y_true=all_labels, y_score=model_outs), epoch_loss)
             # self.summary_writer.add_scalar("epoch", epoch, self.step)
-            if True:
+            if epoch < epochs - 1:
                 self.validate()
+
                 # self.validate() will put the model in validation mode,
                 # so we have to switch back to train mode afterwards
+                self.model.train()
+            else:
+                self.validate(isLast=True)
                 self.model.train()
 
     def print_metrics(self, epoch, accuracy, loss, data_load_time, step_time):
@@ -391,7 +438,7 @@ class Trainer:
             self.step
         )
 
-    def validate(self):
+    def validate(self, isLast=False):
         # results = {"preds": [], "labels": []}
         total_loss = 0
         self.model.eval()
@@ -413,7 +460,9 @@ class Trainer:
 
         accuracy = evaluate(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
         average_loss = total_loss / len(self.val_loader)
-
+        if isLast:
+            self.find_cases(torch.cat(tensor_list, dim=0).cuda())
+            find_per_class_accucy(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
         self.summary_writer.add_scalars(
             "accuracy",
             {"test": accuracy},
@@ -425,6 +474,36 @@ class Trainer:
             self.step
         )
         print(f"validation loss: {average_loss:.5f}, accuracy: {accuracy * 100:2.2f}")
+
+    def find_cases(self, preds):
+        scores = {}
+
+        gts = pd.read_pickle(self.path_to_pkl)
+
+        labels = []
+        model_outs = []
+        for i in range(len(preds)):
+            # labels.append(gts[i][2].numpy())                             # A 50D Ground Truth binary vector
+            labels.append(np.array(gts.iloc[i]['label']).astype(float))  # A 50D Ground Truth binary vector
+            model_outs.append(preds[i].cpu().numpy())  # A 50D vector that assigns probability to each class
+
+        labels = np.array(labels).astype(float)
+        model_outs = np.array(model_outs)
+
+        for i in range(labels.shape[0]):
+            name, _, _ = self.val_data_getter.__getitem__(i)
+            auc_score_average = roc_auc_score(y_true=labels[i], y_score=model_outs[i],
+                                              average=None)
+            auc_score = roc_auc_score(y_true=labels[i], y_score=model_outs[i])
+            scores[auc_score] = (auc_score_average, labels[i], model_outs[i], name)
+        print(len(scores.items()))
+        scores = dict(sorted(scores.items()))
+        print(list(scores.items())[0])
+        print(list(scores.items())[1])
+        print(list(scores.items())[-2])
+        print(list(scores.items())[-1])
+        print(len(scores.items()))
+        print(labels.shape[0])
 
 
 def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
@@ -442,7 +521,6 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
     tb_log_dir_prefix = f'CNN_MIR_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
     tb_log_dir_prefix += f'strde_conv_size,stride({args.stride_conv_length}, {args.stride_conv_stride})_'
     tb_log_dir_prefix += f'optimizer={args.optimizer}_'
-    tb_log_dir_prefix += f'more_kernel_'
 
     i = 0
     while i < 1000:
