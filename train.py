@@ -170,6 +170,12 @@ def main(args):
         log_frequency=args.log_frequency,
     )
 
+    # save the model
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        # Add any other information you want to save
+    }, 'model.pth')
+
     summary_writer.close()
 
 
