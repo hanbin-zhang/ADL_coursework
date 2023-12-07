@@ -8,12 +8,8 @@ This README provides information on how to use the provided Python script for tr
 1. Open a terminal or command prompt.
 2. Navigate to the directory containing the script (`train.py`).
 3. Run the script with the desired command line arguments. Example:
-
-   ```bash
-   python train.py --dataset-root /path/to/dataset --learning-rate 0.001 --optimizer adamW --model super --dropout 0.3
-   ```
    
-   ```example
+   ```bash
    python train.py --dataset-root /mnt/storage/scratch/ow20717/MagnaTagATune --learning-rate 0.001 --optimizer adamW --model super --dropout 0.3
    ```
 
@@ -59,4 +55,4 @@ The trained model is saved to a file named `model.pth` in the script's directory
 For any additional help or inquiries, please refer to the script's author or documentation.
 
 ## Shell Script
-A shell script train.sh included for running with sbatch 
+A shell script train.sh included for running with sbatch. Please add flags as you wish. 
