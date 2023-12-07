@@ -152,19 +152,17 @@ def main(args):
         pin_memory=True,
     )
 
-    model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
-    # if args.model == 'more':
-    #
-    #     model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-    #                 stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
-    #                 second_kernel_number=32)
-    # elif args.model == 'super':
-    #     model = CNNSuper(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-    #                      stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
-    # else:
-    #     model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-    #                 stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+    if args.model == 'more':
+        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
+                    second_kernel_number=32)
+    elif args.model == 'super':
+        model = CNNSuper(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                         stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
+                         dropout_ratio=0.2)
+    else:
+        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.BCELoss()
