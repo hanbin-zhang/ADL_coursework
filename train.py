@@ -152,14 +152,19 @@ def main(args):
         pin_memory=True,
     )
 
-    if args.model == 'more':
-
-        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
-                    second_kernel_number=32)
-    else:
-        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+    model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                     stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+    # if args.model == 'more':
+    #
+    #     model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+    #                 stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
+    #                 second_kernel_number=32)
+    # elif args.model == 'super':
+    #     model = CNNSuper(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+    #                      stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+    # else:
+    #     model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+    #                 stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.BCELoss()
@@ -208,7 +213,7 @@ class CNN(nn.Module):
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=channels*32,
+            out_channels=channels * 32,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
@@ -217,8 +222,8 @@ class CNN(nn.Module):
         # self.poolsC = nn.AdaptiveAvgPool1d(output_size=1365)
 
         self.conv1d1 = nn.Conv1d(
-            in_channels=channels * 32,
-            out_channels=channels * 32,
+            in_channels=self.sConv.out_channels,
+            out_channels=32,
             kernel_size=8,
             padding='same'
         )
@@ -270,8 +275,10 @@ class CNN(nn.Module):
 
         # Update fc layer sizes if necessary
         if self.fc1.in_features != fc_input_size:
+
             self.fc1 = nn.Linear(fc_input_size, 100).to(x.device)
             self.initialise_layer(self.fc1)
+            print(self.fc1.in_features)
         x = F.relu(self.batchNorm1d3(self.fc1(x)))
 
         # x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50)).mean(dim=1)
@@ -288,15 +295,15 @@ class CNN(nn.Module):
             nn.init.kaiming_normal_(layer.weight)
 
 
-class CNN_super(CNN):
+class CNNSuper(CNN):
     def __init__(self, sub_clips: int, channels: int,
                  num_samples: int, class_count: int,
                  stride_conv_size: int, stride_conv_stride: int,
                  dropout_ratio: float,
                  second_kernel_number: int = 1,
                  ):
-        super(CNN_super, self).__init__(sub_clips, channels, num_samples, class_count,
-                                        stride_conv_size, stride_conv_stride, second_kernel_number)
+        super(CNNSuper, self).__init__(sub_clips, channels, num_samples, class_count,
+                                       stride_conv_size, stride_conv_stride, second_kernel_number)
 
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
