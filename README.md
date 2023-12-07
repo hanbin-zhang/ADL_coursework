@@ -10,7 +10,7 @@ This README provides information on how to use the provided Python script for tr
 3. Run the script with the desired command line arguments. Example:
 
    ```bash
-   python train.py --dataset-root /path/to/dataset --learning-rate 0.001 --optimizer adamW --model super --dropout 0.2
+   python train.py --dataset-root /path/to/dataset --learning-rate 0.001 --optimizer adamW --model super --dropout 0.3
    ```
 
 ### Command Line Arguments
