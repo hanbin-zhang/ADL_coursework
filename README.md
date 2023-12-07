@@ -12,6 +12,10 @@ This README provides information on how to use the provided Python script for tr
    ```bash
    python train.py --dataset-root /path/to/dataset --learning-rate 0.001 --optimizer adamW --model super --dropout 0.3
    ```
+   
+   ```example
+   python train.py --dataset-root /mnt/storage/scratch/ow20717/MagnaTagATune --learning-rate 0.001 --optimizer adamW --model super --dropout 0.3
+   ```
 
 ### Command Line Arguments
 
