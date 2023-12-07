@@ -158,7 +158,6 @@ def main(args):
         pin_memory=True,
     )
 
-
     if args.model == 'more':
         model = CNNMore(channels=1, num_samples=34950, sub_clips=10, class_count=10,
                         stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
@@ -321,14 +320,13 @@ class CNN(nn.Module):
             kernel_size=8,
             padding='same'
         )
-        self.dropout1 = nn.Dropout1d(p=0.2)
         self.initialise_layer(self.conv1d1)
         self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
 
         self.conv1d2 = nn.Conv1d(
             in_channels=self.conv1d1.out_channels,
-            out_channels=self.conv1d1.out_channels * 32,
+            out_channels=self.conv1d1.out_channels * self.class_count,
             kernel_size=8,
             padding='same'
         )
@@ -337,7 +335,6 @@ class CNN(nn.Module):
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
 
         self.fc1 = nn.Linear(1, 100)
-        # self.initialise_layer(self.fc1)
         self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
 
         self.fc2 = nn.Linear(100, 50)
