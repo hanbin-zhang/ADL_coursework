@@ -53,3 +53,6 @@ The trained model is saved to a file named `model.pth` in the script's directory
 - Make sure to install the required Python packages before running the script.
 
 For any additional help or inquiries, please refer to the script's author or documentation.
+
+## Shell Script
+A shell script train.sh included for running with sbatch 
