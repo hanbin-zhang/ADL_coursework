@@ -216,7 +216,7 @@ class CNN(nn.Module):
             kernel_size=8,
             padding='same'
         )
-        print(self.conv1d1.out_channels)
+        print(self.conv1d2.out_channels)
         self.initialise_layer(self.conv1d2)
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
