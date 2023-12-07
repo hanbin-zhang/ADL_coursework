@@ -100,9 +100,9 @@ parser.add_argument(
 parser.add_argument(
     '--model',
     type=str,
-    choices=['base', 'more'],
+    choices=['base', 'more', 'super'],
     default='base',
-    help='Specify the model version (base, more).')
+    help='Specify the model version (base, more, super).')
 
 
 class ImageShape(NamedTuple):
@@ -203,6 +203,7 @@ class CNN(nn.Module):
         super().__init__()
 
         self.class_count = class_count
+        self.channels = channels
 
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
@@ -217,7 +218,7 @@ class CNN(nn.Module):
 
         self.conv1d1 = nn.Conv1d(
             in_channels=channels * 32,
-            out_channels=channels * 32,
+            out_channels=32,
             kernel_size=8,
             padding='same'
         )
@@ -227,7 +228,7 @@ class CNN(nn.Module):
 
         self.conv1d2 = nn.Conv1d(
             in_channels=self.conv1d1.out_channels,
-            out_channels=self.conv1d1.out_channels * second_kernel_number,
+            out_channels=self.conv1d1.out_channels * 32,
             kernel_size=8,
             padding='same'
         )
@@ -259,6 +260,7 @@ class CNN(nn.Module):
         # x = self.dropout1(x)
         # Reshape to (10, -1)
         x = torch.reshape(x, (audio.size(0), -1))
+
         # Check if the size of the last dimension is not a multiple of 10
         if x.size(1) % 10 != 0:
             # Calculate the padding needed to make the size a multiple of 10
@@ -291,6 +293,124 @@ class CNN(nn.Module):
             nn.init.zeros_(layer.bias)
         if hasattr(layer, "weight"):
             nn.init.kaiming_normal_(layer.weight)
+
+
+class CNN_super(CNN):
+    def __init__(self, sub_clips: int, channels: int,
+                 num_samples: int, class_count: int,
+                 stride_conv_size: int, stride_conv_stride: int,
+                 dropout_ratio: float,
+                 second_kernel_number: int = 1,
+                 ):
+        super(CNN_super, self).__init__(sub_clips, channels, num_samples, class_count,
+                                        stride_conv_size, stride_conv_stride, second_kernel_number)
+
+        # TODO:could this layer have more numbers of filter
+        self.sConv = nn.Conv1d(
+            in_channels=channels,
+            out_channels=channels * 32,
+            kernel_size=stride_conv_size,
+            stride=stride_conv_stride
+        )
+        self.initialise_layer(self.sConv)
+
+        self.conv1d1 = nn.Conv1d(
+            in_channels=channels * 32,
+            out_channels=channels * 32,
+            kernel_size=8,
+            padding='same'
+        )
+
+        self.initialise_layer(self.conv1d1)
+        self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
+
+        self.conv1d2 = nn.Conv1d(
+            in_channels=self.conv1d1.out_channels,
+            out_channels=self.conv1d1.out_channels * 32,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d2)
+        self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
+
+        self.conv1d3 = nn.Conv1d(
+            in_channels=self.conv1d2.out_channels,
+            out_channels=self.conv1d2.out_channels,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d3)
+        self.pool3 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d3 = nn.BatchNorm1d(self.conv1d3.out_channels)
+
+        self.conv1d4 = nn.Conv1d(
+            in_channels=self.conv1d3.out_channels,
+            out_channels=self.conv1d3.out_channels,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d4)
+        self.batchNorm1d4 = nn.BatchNorm1d(self.conv1d4.out_channels)
+
+        self.dropout1 = nn.Dropout1d(p=dropout_ratio)
+
+        self.conv1d5 = nn.Conv1d(
+            in_channels=self.conv1d4.out_channels,
+            out_channels=self.conv1d4.out_channels,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d5)
+        self.batchNorm1d5 = nn.BatchNorm1d(self.conv1d5.out_channels)
+
+        self.poolFinal = nn.MaxPool1d(kernel_size=4, stride=4)
+
+        self.fc1 = nn.Linear(8704, 100)
+        self.initialise_layer(self.fc1)
+        self.batchNorm1dfc1 = nn.BatchNorm1d(self.fc1.out_features)
+
+        self.fc2 = nn.Linear(100, 50)
+        self.initialise_layer(self.fc2)
+
+    def forward(self, audio: torch.Tensor) -> torch.Tensor:
+        x = audio
+        x = F.relu(self.sConv(torch.reshape(x.flatten(start_dim=0),
+                                            (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
+
+        x = self.pool1(F.relu(self.batchNorm1d1(self.conv1d1(x))))
+        x = self.pool2(F.relu(self.batchNorm1d2(self.conv1d2(x))))
+        x = self.pool3(F.relu(self.batchNorm1d3(self.conv1d3(x))))
+
+        residual = x.clone()
+
+        x = self.dropout1(F.relu(self.batchNorm1d4(self.conv1d4(x))))
+        x = self.poolFinal(F.relu(self.batchNorm1d5(self.conv1d5(x)) + residual))
+
+        x = torch.reshape(x, (audio.size(0), -1))
+        # Check if the size of the last dimension is not a multiple of 10
+        if x.size(1) % 10 != 0:
+            # Calculate the padding needed to make the size a multiple of 10
+            padding_size = (10 - x.size(1) % 10) % 10
+
+            # Pad the last dimension
+            x = F.pad(x, (0, padding_size))
+
+        x = torch.reshape(x,
+                          (audio.size(0), 10, -1))
+
+        x = x.view(-1, x.shape[2])
+        fc_input_size = x.size(1)
+
+        # Update fc layer sizes if necessary
+        if self.fc1.in_features != fc_input_size:
+            self.fc1 = nn.Linear(fc_input_size, 100).to(x.device)
+            self.initialise_layer(self.fc1)
+        x = F.relu(self.batchNorm1dfc1(self.fc1(x)))
+        x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).mean(dim=1))
+
+        return x
 
 
 def find_per_class_accucy(preds, gts_path):
@@ -533,6 +653,7 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
     tb_log_dir_prefix = f'CNN_MIR_bs={args.batch_size}_lr={args.learning_rate}_momentum={args.sgd_momentum}_run_'
     tb_log_dir_prefix += f'strde_conv_size,stride({args.stride_conv_length}, {args.stride_conv_stride})_'
     tb_log_dir_prefix += f'optimizer={args.optimizer}_'
+    tb_log_dir_prefix += f'model={args.model}_'
 
     i = 0
     while i < 1000:
