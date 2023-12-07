@@ -104,6 +104,12 @@ parser.add_argument(
     default='base',
     help='Specify the model version (base, more, super).')
 
+parser.add_argument(
+    "--dropout",
+    default=0.3,
+    type=float,
+    help="Value of dropout rate")
+
 
 class ImageShape(NamedTuple):
     height: int
@@ -162,7 +168,7 @@ def main(args):
     elif args.model == 'super':
         model = CNNSuper(channels=1, num_samples=34950, sub_clips=10, class_count=10,
                          stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
-                         dropout_ratio=0.2)
+                         dropout_ratio=args.dropout)
         print('super')
     else:
         model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
