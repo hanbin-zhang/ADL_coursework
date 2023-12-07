@@ -152,17 +152,22 @@ def main(args):
         pin_memory=True,
     )
 
+    print(args.model)
+
     if args.model == 'more':
         model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
                     stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
                     second_kernel_number=32)
+        print('more')
     elif args.model == 'super':
         model = CNNSuper(channels=1, num_samples=34950, sub_clips=10, class_count=10,
                          stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
                          dropout_ratio=0.2)
+        print('super')
     else:
         model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
                     stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+        print('base')
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.BCELoss()
@@ -486,7 +491,7 @@ class Trainer:
 
                 # Compute accuracy
                 all_labels.append(labels)
-                model_outs.append(logits)
+                model_outs.append(logits.detach())
 
                 total_loss += loss.item()
 
