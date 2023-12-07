@@ -161,9 +161,8 @@ def main(args):
     print(args.model)
 
     if args.model == 'more':
-        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
-                    second_kernel_number=32)
+        model = CNNMore(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                        stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
         print('more')
     elif args.model == 'super':
         model = CNNSuper(channels=1, num_samples=34950, sub_clips=10, class_count=10,
@@ -208,6 +207,88 @@ def main(args):
     summary_writer.close()
 
 
+class CNNMore(nn.Module):
+    def __init__(self, sub_clips: int, channels: int,
+                 num_samples: int, class_count: int,
+                 stride_conv_size: int, stride_conv_stride: int):
+        super().__init__()
+
+        self.class_count = class_count
+
+        # TODO:could this layer have more numbers of filter
+        self.sConv = nn.Conv1d(
+            in_channels=channels,
+            out_channels=channels * 32,
+            kernel_size=stride_conv_size,
+            stride=stride_conv_stride
+        )
+        self.initialise_layer(self.sConv)
+
+        self.conv1d1 = nn.Conv1d(
+            in_channels=channels * 32,
+            out_channels=channels * 32,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d1)
+        self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d1 = nn.BatchNorm1d(self.conv1d1.out_channels)
+
+        self.conv1d2 = nn.Conv1d(
+            in_channels=self.conv1d1.out_channels,
+            out_channels=self.conv1d1.out_channels * 32,
+            kernel_size=8,
+            padding='same'
+        )
+        self.initialise_layer(self.conv1d2)
+        self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
+
+        # self.fc1 = None
+        # self.batchNorm1d3 = None
+        self.fc1 = nn.Linear(8704, 100)
+        self.initialise_layer(self.fc1)
+        self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+
+        self.fc2 = nn.Linear(100, 50)
+        self.initialise_layer(self.fc2)
+
+    def forward(self, audio: torch.Tensor) -> torch.Tensor:
+        x = audio
+        x = F.relu(self.sConv(torch.reshape(x.flatten(start_dim=0),
+                                            (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
+
+        x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
+        x = self.pool1(x)
+
+        x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
+        x = self.pool2(x)
+
+        x = torch.reshape(x.flatten(start_dim=0),
+                          (-1, 10, int(x.shape[1] * x.shape[2] / 10)))
+        # if self.fc1 is None:
+        #     self.fc1 = nn.Linear(x.shape[2], 100)
+        #     self.initialise_layer(self.fc1)
+        #     self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
+
+        x = x.view(-1, x.shape[2])
+        x = F.relu(self.batchNorm1d3(self.fc1(x)))
+
+        x = torch.sigmoid(self.fc2(x).reshape(audio.shape[0], 10, 50).mean(dim=1))
+
+        # print(x.shape)
+        # sys.exit()
+
+        return x
+
+    @staticmethod
+    def initialise_layer(layer):
+        if hasattr(layer, "bias"):
+            nn.init.zeros_(layer.bias)
+        if hasattr(layer, "weight"):
+            nn.init.kaiming_normal_(layer.weight)
+
+
 class CNN(nn.Module):
     def __init__(self, sub_clips: int, channels: int,
                  num_samples: int, class_count: int,
@@ -220,7 +301,7 @@ class CNN(nn.Module):
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=channels*32,
+            out_channels=channels * 32,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
@@ -283,7 +364,6 @@ class CNN(nn.Module):
 
         # Update fc layer sizes if necessary
         if self.fc1.in_features != fc_input_size:
-
             self.fc1 = nn.Linear(fc_input_size, 100).to(x.device)
             self.initialise_layer(self.fc1)
             print(self.fc1.in_features)
