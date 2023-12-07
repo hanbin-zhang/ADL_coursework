@@ -227,7 +227,7 @@ class CNN(nn.Module):
 
         self.conv1d2 = nn.Conv1d(
             in_channels=self.conv1d1.out_channels,
-            out_channels=self.conv1d1.out_channels * self.class_count,
+            out_channels=self.conv1d1.out_channels * second_kernel_number,
             kernel_size=8,
             padding='same'
         )
