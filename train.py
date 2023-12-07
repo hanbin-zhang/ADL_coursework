@@ -655,7 +655,7 @@ class Trainer:
 
                 tensor_list.append(preds)
 
-        accuracy = evaluate(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
+        accuracy = evaluate(torch.cat(tensor_list, dim=0), self.path_to_pkl)
         average_loss = total_loss / len(self.val_loader)
 
         self.summary_writer.add_scalars(
