@@ -45,12 +45,6 @@ parser.add_argument(
     help="Number of epochs (passes through the entire dataset) to train for",
 )
 parser.add_argument(
-    "--val-frequency",
-    default=2,
-    type=int,
-    help="How frequently to test the model on the validation set in number of epochs",
-)
-parser.add_argument(
     "--log-frequency",
     default=10,
     type=int,
@@ -188,7 +182,6 @@ def main(args):
 
     trainer.train(
         args.epochs,
-        args.val_frequency,
         print_frequency=args.print_frequency,
         log_frequency=args.log_frequency,
     )
@@ -239,8 +232,6 @@ class CNNMore(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
 
-        # self.fc1 = None
-        # self.batchNorm1d3 = None
         self.fc1 = nn.Linear(8704, 100)
         self.initialise_layer(self.fc1)
         self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
@@ -509,7 +500,6 @@ def find_per_class_accucy(preds, gts_path):
     labels = []
     model_outs = []
     for i in range(len(preds)):
-        # labels.append(gts[i][2].numpy())                             # A 50D Ground Truth binary vector
         labels.append(np.array(gts.iloc[i]['label']).astype(float))  # A 50D Ground Truth binary vector
         model_outs.append(preds[i].cpu().numpy())  # A 50D vector that assigns probability to each class
 
@@ -548,7 +538,6 @@ class Trainer:
     def train(
             self,
             epochs: int,
-            val_frequency: int,
             print_frequency: int = 20,
             log_frequency: int = 5,
             start_epoch: int = 0
@@ -590,8 +579,7 @@ class Trainer:
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
-                # if ((self.step + 1) % log_frequency) == 0:
-                #     self.log_metrics(epoch, 4396, loss, data_load_time, step_time)
+
                 if ((self.step + 1) % print_frequency) == 0:
                     self.print_metrics(epoch, 4396, loss, data_load_time, step_time)
 
@@ -602,11 +590,8 @@ class Trainer:
             all_labels = torch.cat(all_labels, dim=0).cpu().numpy()
             model_outs = torch.cat(model_outs, dim=0).cpu().numpy().astype(float)
             self.log_train_metrics(epoch, roc_auc_score(y_true=all_labels, y_score=model_outs), epoch_loss)
-            # self.summary_writer.add_scalar("epoch", epoch, self.step)
             if True:
                 self.validate()
-                # self.validate() will put the model in validation mode,
-                # so we have to switch back to train mode afterwards
                 self.model.train()
 
     def print_metrics(self, epoch, accuracy, loss, data_load_time, step_time):
@@ -666,12 +651,9 @@ class Trainer:
                 logits = self.model(batch)
                 loss = self.criterion(logits, labels)
                 total_loss += loss.item()
-                # preds = logits.argmax(dim=-1).cpu().numpy()
                 preds = logits
 
                 tensor_list.append(preds)
-                # results["preds"].extend(list(preds))
-                # results["labels"].extend(list(labels.cpu().numpy()))
 
         accuracy = evaluate(torch.cat(tensor_list, dim=0).cuda(), self.path_to_pkl)
         average_loss = total_loss / len(self.val_loader)
