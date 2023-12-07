@@ -96,6 +96,14 @@ parser.add_argument(
     type=int,
     help="Value of stride convolution kernel stride")
 
+# Add a string argument with allowed values
+parser.add_argument(
+    '--model',
+    type=str,
+    choices=['base', 'more'],
+    default='base',
+    help='Specify the model version (base, more).')
+
 
 class ImageShape(NamedTuple):
     height: int
@@ -144,8 +152,14 @@ def main(args):
         pin_memory=True,
     )
 
-    model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
-                stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
+    if args.model == 'more':
+
+        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride,
+                    second_kernel_number=32)
+    else:
+        model = CNN(channels=1, num_samples=34950, sub_clips=10, class_count=10,
+                    stride_conv_size=args.stride_conv_length, stride_conv_stride=args.stride_conv_stride)
 
     # TASK 8: Redefine the criterion to be softmax cross entropy
     criterion = nn.BCELoss()
@@ -184,7 +198,8 @@ def main(args):
 class CNN(nn.Module):
     def __init__(self, sub_clips: int, channels: int,
                  num_samples: int, class_count: int,
-                 stride_conv_size: int, stride_conv_stride: int):
+                 stride_conv_size: int, stride_conv_stride: int,
+                 second_kernel_number: int = 1):
         super().__init__()
 
         self.class_count = class_count
@@ -212,7 +227,7 @@ class CNN(nn.Module):
 
         self.conv1d2 = nn.Conv1d(
             in_channels=self.conv1d1.out_channels,
-            out_channels=self.conv1d1.out_channels * 32,
+            out_channels=self.conv1d1.out_channels * self.class_count,
             kernel_size=8,
             padding='same'
         )
