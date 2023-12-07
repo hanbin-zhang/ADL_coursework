@@ -165,8 +165,9 @@ def main(args):
     criterion = nn.BCELoss()
 
     # TASK 11: Define the optimizer
-    print(args.optimizer)
+
     optimizer = initialize_optimizer(model, args)
+    print(optimizer.__name__)
 
     log_dir = get_summary_writer_log_dir(args)
     print(f"Writing logs to {log_dir}")
@@ -203,22 +204,21 @@ class CNN(nn.Module):
         super().__init__()
 
         self.class_count = class_count
-        self.channels = channels
 
         # TODO:could this layer have more numbers of filter
         self.sConv = nn.Conv1d(
             in_channels=channels,
-            out_channels=channels * 32,
+            out_channels=channels*32,
             kernel_size=stride_conv_size,
             stride=stride_conv_stride
         )
         self.initialise_layer(self.sConv)
 
-        self.poolsC = nn.AdaptiveAvgPool1d(output_size=1365)
+        # self.poolsC = nn.AdaptiveAvgPool1d(output_size=1365)
 
         self.conv1d1 = nn.Conv1d(
             in_channels=channels * 32,
-            out_channels=32,
+            out_channels=channels * 32,
             kernel_size=8,
             padding='same'
         )
@@ -253,9 +253,6 @@ class CNN(nn.Module):
         x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
-        # print(x.shape)
-        # print(residual.shape)
-        # x = x+residual
         x = self.pool2(x)
         # x = self.dropout1(x)
         # Reshape to (10, -1)
