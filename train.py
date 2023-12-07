@@ -167,7 +167,7 @@ def main(args):
     # TASK 11: Define the optimizer
 
     optimizer = initialize_optimizer(model, args)
-    print(optimizer.__name__)
+    print(type(optimizer).__name__)
 
     log_dir = get_summary_writer_log_dir(args)
     print(f"Writing logs to {log_dir}")
@@ -248,14 +248,10 @@ class CNN(nn.Module):
         x = F.relu(self.sConv(torch.reshape(x.flatten(start_dim=0),
                                             (audio.shape[0], 1, audio.shape[1] * audio.shape[3]))))
 
-        # x = self.poolsC(x)
-
         x = F.relu(self.batchNorm1d1(self.conv1d1(x)))
         x = self.pool1(x)
         x = F.relu(self.batchNorm1d2(self.conv1d2(x)))
         x = self.pool2(x)
-        # x = self.dropout1(x)
-        # Reshape to (10, -1)
         x = torch.reshape(x, (audio.size(0), -1))
 
         # Check if the size of the last dimension is not a multiple of 10
