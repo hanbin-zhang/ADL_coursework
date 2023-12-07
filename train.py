@@ -235,9 +235,6 @@ class CNN(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
         self.batchNorm1d2 = nn.BatchNorm1d(self.conv1d2.out_channels)
 
-        conv1_output_size = ((num_samples - stride_conv_size) // stride_conv_stride) + 1
-        conv1_output_size = int(conv1_output_size)
-
         self.fc1 = nn.Linear(1, 100)
         # self.initialise_layer(self.fc1)
         self.batchNorm1d3 = nn.BatchNorm1d(self.fc1.out_features)
